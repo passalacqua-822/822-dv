@@ -15,14 +15,20 @@ for f in vapoursynth-mvtools vapoursynth-bestsource; do
     cp "$lib" "$ENGINE/vs-plugins/"
   done
 done
+bash "$(dirname "$0")/build_plugins.sh" "$ENGINE/vs-plugins"
 echo "Plugins intégrés :"; ls -la "$ENGINE/vs-plugins"
 
-for repo in havsfunc mvsfunc; do
-  rm -rf "/tmp/$repo"
-  git clone -q "https://github.com/HomeOfVapourSynthEvolution/$repo" "/tmp/$repo"
-  ref_var="$(echo "${repo}_REF" | tr '[:lower:]' '[:upper:]')"
-  ref="${!ref_var:-$(git -C "/tmp/$repo" tag | sort -V | tail -1)}"
-  git -C "/tmp/$repo" checkout -q "$ref"
-  cp "$(find "/tmp/$repo" -maxdepth 2 -name "$repo.py" | head -1)" "$ENGINE/pyscripts/"
-  echo "$repo -> $ref"
+# QTGMC « classique » (celui de Hybrid) : havsfunc r33. Les versions suivantes ne contiennent plus QTGMC.
+HAVSFUNC_REF="${HAVSFUNC_REF:-r33}"
+MVSFUNC_REF="${MVSFUNC_REF:-r10}"
+for pair in "HomeOfVapourSynthEvolution/havsfunc:$HAVSFUNC_REF:havsfunc.py" \
+            "HomeOfVapourSynthEvolution/mvsfunc:$MVSFUNC_REF:mvsfunc.py" \
+            "dubhater/vapoursynth-adjust:master:adjust.py"; do
+  IFS=: read -r repo ref file <<< "$pair"
+  dir="/tmp/$(basename "$repo")"
+  rm -rf "$dir"
+  git clone -q "https://github.com/$repo" "$dir"
+  git -C "$dir" checkout -q "$ref"
+  cp "$dir/$file" "$ENGINE/pyscripts/"
+  echo "$file <- $repo@$ref"
 done

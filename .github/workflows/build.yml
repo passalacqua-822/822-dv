@@ -46,7 +46,7 @@ jobs:
 
       - name: Diagnostic moteur
         continue-on-error: true
-        run: PYTHONPATH="$VS_SITE:$ENGINE_DIR/pyscripts" python ci/probe.py "$RUNNER_TEMP/test.dv"
+        run: PYTHONPATH="$VS_SITE" python -c "from app import engine; print(engine.engine_report())"
 
       - name: Test avant emballage
         id: devtest

@@ -13,6 +13,8 @@ def base_dir():
 
 
 def engine_dir():
+    if not getattr(sys, "frozen", False) and os.environ.get("ENGINE_DIR"):
+        return os.path.abspath(os.environ["ENGINE_DIR"])  # mode développement / tests
     return os.path.join(base_dir(), "engine")
 
 

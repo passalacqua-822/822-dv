@@ -9,8 +9,9 @@ ENGINE = os.environ.get("ENGINE_DIR", "build/engine")
 VS_SITE = os.environ["VS_SITE"]  # dossier contenant le module Python « vapoursynth »
 
 binaries = [(f, "engine/bin") for f in glob.glob(f"{ENGINE}/bin/*")]
-binaries += [(f, "engine/vs-plugins") for f in glob.glob(f"{ENGINE}/vs-plugins/*")]
+binaries += [(f, "engine/vs-plugins") for f in glob.glob(f"{ENGINE}/vs-plugins/*") if f.endswith((".dylib", ".so"))]
 datas = [(f"{ENGINE}/pyscripts", "engine/pyscripts"), ("assets/icon_1024.png", "assets")]
+datas += [(f, "engine/vs-plugins") for f in glob.glob(f"{ENGINE}/vs-plugins/*.bin")]  # poids NNEDI3
 
 vs_datas, vs_bins, vs_hidden = collect_all("vapoursynth")
 
@@ -19,7 +20,7 @@ a = Analysis(
     pathex=[".", VS_SITE, f"{ENGINE}/pyscripts"],
     binaries=binaries + vs_bins,
     datas=datas + vs_datas,
-    hiddenimports=vs_hidden + ["vapoursynth", "havsfunc", "mvsfunc"],
+    hiddenimports=vs_hidden + ["vapoursynth", "havsfunc", "mvsfunc", "adjust"],
     excludes=["tkinter"],
 )
 pyz = PYZ(a.pure)
