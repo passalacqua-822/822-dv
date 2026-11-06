@@ -1,0 +1,39 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Construction de « 822 DV.app » avec PyInstaller (lancé par .github/workflows/build.yml).
+import glob
+import os
+
+from PyInstaller.utils.hooks import collect_all
+
+ENGINE = os.environ.get("ENGINE_DIR", "build/engine")
+VS_SITE = os.environ["VS_SITE"]  # dossier contenant le module Python « vapoursynth »
+
+binaries = [(f, "engine/bin") for f in glob.glob(f"{ENGINE}/bin/*")]
+binaries += [(f, "engine/vs-plugins") for f in glob.glob(f"{ENGINE}/vs-plugins/*")]
+datas = [(f"{ENGINE}/pyscripts", "engine/pyscripts"), ("assets/icon_1024.png", "assets")]
+
+vs_datas, vs_bins, vs_hidden = collect_all("vapoursynth")
+
+a = Analysis(
+    ["822dv.py"],
+    pathex=[".", VS_SITE, f"{ENGINE}/pyscripts"],
+    binaries=binaries + vs_bins,
+    datas=datas + vs_datas,
+    hiddenimports=vs_hidden + ["vapoursynth", "havsfunc", "mvsfunc"],
+    excludes=["tkinter"],
+)
+pyz = PYZ(a.pure)
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="822 DV", console=False,
+          target_arch="arm64", codesign_identity=None)
+coll = COLLECT(exe, a.binaries, a.datas, name="822 DV")
+app = BUNDLE(
+    coll,
+    name="822 DV.app",
+    icon="build/822dv.icns",
+    bundle_identifier="fr.passalacqua.822dv",
+    info_plist={
+        "CFBundleShortVersionString": "1.0",
+        "NSHighResolutionCapable": True,
+        "LSMinimumSystemVersion": "13.0",
+    },
+)

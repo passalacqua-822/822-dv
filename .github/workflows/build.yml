@@ -1,0 +1,110 @@
+name: Build 822 DV
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ["README.md", "docs/**"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      ENGINE_DIR: build/engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Machine
+        run: sw_vers; uname -m; python --version
+
+      - name: Installer le moteur (Homebrew)
+        run: |
+          brew install ffmpeg vapoursynth vapoursynth-mvtools vapoursynth-bestsource
+          brew list --versions | grep -Ei 'vapoursynth|ffmpeg' || true
+          VS_SITE=$(ls -d "$(brew --prefix vapoursynth)"/libexec/lib/python3*/site-packages | head -1)
+          echo "VS_SITE=$VS_SITE" >> "$GITHUB_ENV"
+          echo "VS_SITE=$VS_SITE"
+
+      - name: Dépendances Python
+        run: python -m pip install --upgrade pip && python -m pip install PySide6 pyinstaller
+
+      - name: Rassembler le moteur
+        run: bash ci/collect_engine.sh "$ENGINE_DIR"
+
+      - name: Vidéo DV de test (mêmes propriétés que les fichiers de Lucas)
+        run: bash ci/make_test_dv.sh "$RUNNER_TEMP/test.dv" 4
+
+      - name: Diagnostic moteur
+        continue-on-error: true
+        run: PYTHONPATH="$VS_SITE:$ENGINE_DIR/pyscripts" python ci/probe.py "$RUNNER_TEMP/test.dv"
+
+      - name: Test avant emballage
+        id: devtest
+        continue-on-error: true
+        run: PYTHONPATH="$VS_SITE:$ENGINE_DIR/pyscripts" python 822dv.py --selftest "$RUNNER_TEMP/test.dv" "$RUNNER_TEMP/out_dev"
+
+      - name: Icône
+        run: |
+          mkdir -p build/icon.iconset
+          for s in 16 32 128 256 512; do
+            sips -z $s $s assets/icon_1024.png --out build/icon.iconset/icon_${s}x${s}.png >/dev/null
+            d=$((s*2)); sips -z $d $d assets/icon_1024.png --out build/icon.iconset/icon_${s}x${s}@2x.png >/dev/null
+          done
+          iconutil -c icns build/icon.iconset -o build/822dv.icns
+
+      - name: Construire 822 DV.app
+        run: |
+          python -m PyInstaller --noconfirm --clean 822dv.spec
+          codesign --force --deep --sign - "dist/822 DV.app"
+          du -sh "dist/822 DV.app"
+
+      - name: Vérifier que l'application ne dépend pas de Homebrew
+        run: |
+          bad=0
+          while IFS= read -r -d '' f; do
+            if file "$f" | grep -q Mach-O; then
+              if otool -L "$f" | tail -n +2 | grep -q '/opt/homebrew'; then echo "DÉPENDANCE EXTERNE : $f"; otool -L "$f" | grep /opt/homebrew; bad=1; fi
+            fi
+          done < <(find "dist/822 DV.app" -type f -print0)
+          exit $bad
+
+      - name: Test de l'application seule (Homebrew masqué)
+        id: apptest
+        run: |
+          sudo mv /opt/homebrew /opt/homebrew_hidden
+          "dist/822 DV.app/Contents/MacOS/822 DV" --selftest "$RUNNER_TEMP/test.dv" "$RUNNER_TEMP/out_app"
+
+      - name: Remettre Homebrew
+        if: always()
+        run: if [ -d /opt/homebrew_hidden ]; then sudo mv /opt/homebrew_hidden /opt/homebrew; fi
+
+      - name: Zip
+        if: always()
+        run: |
+          if [ -d "dist/822 DV.app" ]; then ditto -c -k --sequesterRsrc --keepParent "dist/822 DV.app" "822-DV-mac.zip"; ls -la 822-DV-mac.zip; fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: 822-DV-mac
+          path: 822-DV-mac.zip
+          if-no-files-found: ignore
+
+      - name: Publier la version
+        if: steps.apptest.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" 822-DV-mac.zip \
+            --title "822 DV 1.0 (build ${{ github.run_number }})" \
+            --notes-file docs/RELEASE_NOTES.md
