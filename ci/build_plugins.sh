@@ -25,7 +25,7 @@ cp zn/vsznedi3.so zn/nnedi3_weights.bin "$OUT/"
 echo "== EEDI3 (eedi3m)"
 git clone -q --depth 1 https://github.com/HomeOfVapourSynthEvolution/VapourSynth-EEDI3 eedi3
 (cd eedi3 && CXXFLAGS="-include cfloat" PYTHONPATH="${VS_SITE:-}" meson setup build --buildtype=release >/dev/null && ninja -C build)
-cp eedi3/build/eedi3m.* "$OUT/"
+cp eedi3/build/eedi3m.dylib "$OUT/"
 
 echo "== fmtconv (fmtc)"
 brew install autoconf automake libtool >/dev/null 2>&1 || true
