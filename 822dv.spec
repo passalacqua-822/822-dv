@@ -20,7 +20,12 @@ a = Analysis(
     pathex=[".", VS_SITE, f"{ENGINE}/pyscripts"],
     binaries=binaries + vs_bins,
     datas=datas + vs_datas,
-    hiddenimports=vs_hidden + ["vapoursynth", "havsfunc", "mvsfunc", "adjust"],
+    # Modules importés depuis le module compilé de VapourSynth (invisibles pour l'analyse automatique)
+    hiddenimports=vs_hidden + ["vapoursynth", "havsfunc", "mvsfunc", "adjust",
+                               "concurrent", "concurrent.futures", "fractions", "ctypes", "inspect",
+                               "logging", "tomllib", "weakref", "gc", "traceback", "atexit", "enum",
+                               "typing", "types", "threading", "functools", "pathlib", "dataclasses",
+                               "asyncio", "json", "argparse", "importlib.metadata", "decimal", "numbers"],
     excludes=["tkinter"],
 )
 pyz = PYZ(a.pure)

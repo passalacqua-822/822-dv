@@ -17,4 +17,10 @@ git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.
 (cd zn && make -j"$(sysctl -n hw.ncpu)" vsznedi3.so)
 cp zn/vsznedi3.so zn/nnedi3_weights.bin "$OUT/"
 
+echo "== fmtconv (fmtc)"
+brew install autoconf automake libtool >/dev/null 2>&1 || true
+git clone -q --depth 1 https://github.com/EleonoreMizo/fmtconv fm
+(cd fm/build/unix && LIBTOOLIZE=glibtoolize ./autogen.sh >/dev/null 2>&1 && ./configure >/dev/null && make -j"$(sysctl -n hw.ncpu)" >/dev/null)
+cp fm/build/unix/.libs/libfmtconv.dylib "$OUT/"
+
 ls -la "$OUT"
