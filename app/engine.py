@@ -221,9 +221,24 @@ def source_matrix(s: Settings, info):
     return "470bg" if info["height"] <= 576 else "709"
 
 
+MATRIX_CODES = {"709": 1, "470bg": 5, "170m": 6}
+
+
+def standard_fps(fps):
+    """Fréquence normalisée (num, den) : 25, 29,97, 50… comme le « AssumeFPS » de Hybrid."""
+    for num, den in ((24000, 1001), (24, 1), (25, 1), (30000, 1001), (30, 1), (50, 1), (60000, 1001), (60, 1)):
+        if abs(fps - num / den) < 0.01:
+            return num, den
+    return round(fps * 1000), 1000
+
+
 def build_vs(s: Settings, src, scan, log, info):
     vs, core = vs_core(log)
     clip = _source(core, src)
+    # Mêmes préparations que le script généré par Hybrid
+    clip = core.std.SetFrameProps(clip, _Matrix=MATRIX_CODES[source_matrix(s, info)], _ColorRange=1)
+    fps = standard_fps(info["fps"])
+    clip = core.std.AssumeFPS(clip, fpsnum=fps[0], fpsden=fps[1])
 
     if s.deinterlacer.startswith("QTGMC"):
         if scan == "progressive":
@@ -244,7 +259,13 @@ def build_vs(s: Settings, src, scan, log, info):
                 kw["Lossless"] = s.qtgmc_lossless
             kw.update(parse_extra(s.qtgmc_extra))
             log("QTGMC(" + ", ".join(f"{k}={v!r}" for k, v in kw.items()) + ")")
-            clip = haf.QTGMC(clip, **kw)
+            clip = haf.QTGMC(Input=clip, **kw)
+            clip = core.std.SetFieldBased(clip, 0)
+
+    if s.color_matrix_to_709:
+        # Conversion faite comme Hybrid : étape séparée, dans le format d'origine.
+        # (Ne pas la fusionner avec le passage en 4:2:2 : la couleur « déteint » alors sur le détail.)
+        clip = core.resize.Bicubic(clip, matrix_in_s=source_matrix(s, info), matrix_s="709", range_in=0, range=0)
 
     if s.denoise_enabled and s.denoiser.startswith("MDegrain"):
         log(f"Débruitage MDegrain (radius {s.mdegrain_radius}, thSAD {s.mdegrain_thsad})")
@@ -267,18 +288,18 @@ def build_vs(s: Settings, src, scan, log, info):
     if any(c):
         clip = core.std.Crop(clip, left=c[0], right=c[1], top=c[2], bottom=c[3])
 
-    vs_fmt, _ = output_format(s)
-    kw = {"format": getattr(vs, vs_fmt)}
-    if s.color_matrix_to_709:
-        kw.update(matrix_in_s=source_matrix(s, info), matrix_s="709")
     dims = target_size(s, info)
-    if dims:
-        kw.update(width=dims[0], height=dims[1])
-    if s.resizer == "Bicubic":
-        kw.update(filter_param_a=s.bicubic_b, filter_param_b=s.bicubic_c)
-    elif s.resizer == "Lanczos":
-        kw.update(filter_param_a=3)
-    clip = getattr(core.resize, s.resizer)(clip, **kw)
+    if dims and (dims[0], dims[1]) != (clip.width, clip.height):
+        kw = {"width": dims[0], "height": dims[1]}
+        if s.resizer == "Bicubic":
+            kw.update(filter_param_a=s.bicubic_b, filter_param_b=s.bicubic_c)
+        elif s.resizer == "Lanczos":
+            kw.update(filter_param_a=3)
+        clip = getattr(core.resize, s.resizer)(clip, **kw)
+
+    # Format de sortie, comme Hybrid : Bicubic, plage limitée
+    vs_fmt, _ = output_format(s)
+    clip = core.resize.Bicubic(clip, format=getattr(vs, vs_fmt), range_s="limited")
 
     if s.vs_custom_code.strip():
         ns = {"vs": vs, "core": core, "clip": clip}
@@ -292,8 +313,7 @@ def build_vs(s: Settings, src, scan, log, info):
 def video_args(s: Settings, pass_no=None, passlog=None):
     _, pix = output_format(s)
     vh = s.video_handling
-    tags = (["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
-            if s.color_matrix_to_709 else [])
+    tags = []  # comme Hybrid : pas d'étiquette de couleur dans le fichier
     if vh == "ProRes":
         if s.prores_encoder.startswith("VideoToolbox"):
             vt = {"Proxy": "proxy", "LT": "lt", "Standard": "standard", "HQ": "hq", "4444": "4444", "4444 XQ": "xq"}

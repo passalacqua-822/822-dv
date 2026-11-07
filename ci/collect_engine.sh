@@ -18,8 +18,8 @@ done
 bash "$(dirname "$0")/build_plugins.sh" "$ENGINE/vs-plugins"
 echo "Plugins intégrés :"; ls -la "$ENGINE/vs-plugins"
 
-# QTGMC « classique » (celui de Hybrid) : havsfunc r33. Les versions suivantes ne contiennent plus QTGMC.
-HAVSFUNC_REF="${HAVSFUNC_REF:-r33}"
+# QTGMC « classique » de Hybrid : havsfunc d'octobre 2021 (les versions de 2025 ne contiennent plus QTGMC).
+HAVSFUNC_REF="${HAVSFUNC_REF:-3b6a80c}"  # oct. 2021 : la version embarquée par Hybrid 2022
 MVSFUNC_REF="${MVSFUNC_REF:-r10}"
 for pair in "HomeOfVapourSynthEvolution/havsfunc:$HAVSFUNC_REF:havsfunc.py" \
             "HomeOfVapourSynthEvolution/mvsfunc:$MVSFUNC_REF:mvsfunc.py" \
@@ -33,15 +33,4 @@ for pair in "HomeOfVapourSynthEvolution/havsfunc:$HAVSFUNC_REF:havsfunc.py" \
   echo "$file <- $repo@$ref"
 done
 
-# havsfunc r33 écrit _lambda= / _global= (ancienne convention de VapourSynth pour les mots réservés
-# de Python). VapourSynth récent ne les reconnaît plus : on passe les vrais noms via **{'lambda': ...}.
-python3 - "$ENGINE/pyscripts/havsfunc.py" <<'EOF'
-import re, sys
-p = sys.argv[1]
-src = open(p, encoding="utf-8").read()
-new, n = re.subn(r"\b_(lambda|global)=([A-Za-z_][A-Za-z0-9_]*)", r"**{'\1': \2}", src)
-assert n == 6, f"attendu 6 remplacements, obtenu {n}"
-compile(new, p, "exec")
-open(p, "w", encoding="utf-8").write(new)
-print(f"havsfunc corrigé : {n} arguments _lambda/_global")
-EOF
+

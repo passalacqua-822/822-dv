@@ -12,7 +12,7 @@ LAST_FILE = os.path.join(APP_DIR, "last.json")
 LOG_DIR = os.path.join(HOME, "Library", "Logs", "822 DV")
 
 
-SETTINGS_VERSION = 4  # v4 : comme Hybrid (PAR d'origine, pas de conversion de matrice) ; v2 : preset « 822 » ; v3 : sortie sur le Bureau, suffixe _cleanDV, débruitage désactivable
+SETTINGS_VERSION = 5  # v5 : pipeline identique au script Hybrid, TR2/Sharpness en auto ; v4 : comme Hybrid (PAR d'origine, pas de conversion de matrice) ; v2 : preset « 822 » ; v3 : sortie sur le Bureau, suffixe _cleanDV, débruitage désactivable
 
 
 @dataclass
@@ -45,8 +45,8 @@ class Settings:
     qtgmc_bob: bool = True
     qtgmc_tr0: int = -1
     qtgmc_tr1: int = -1
-    qtgmc_tr2: int = 1
-    qtgmc_sharpness: float = 1.0
+    qtgmc_tr2: int = -1
+    qtgmc_sharpness: float = -0.1
     qtgmc_source_match: int = 0
     qtgmc_lossless: int = 0
     qtgmc_extra: str = ""
