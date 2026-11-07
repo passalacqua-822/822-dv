@@ -12,7 +12,7 @@ LAST_FILE = os.path.join(APP_DIR, "last.json")
 LOG_DIR = os.path.join(HOME, "Library", "Logs", "822 DV")
 
 
-SETTINGS_VERSION = 3  # v2 : preset « 822 » ; v3 : sortie sur le Bureau, suffixe _cleanDV, débruitage désactivable
+SETTINGS_VERSION = 4  # v4 : comme Hybrid (PAR d'origine, pas de conversion de matrice) ; v2 : preset « 822 » ; v3 : sortie sur le Bureau, suffixe _cleanDV, débruitage désactivable
 
 
 @dataclass
@@ -31,7 +31,7 @@ class Settings:
     crop_top: int = 0
     crop_right: int = 0
     crop_bottom: int = 0
-    par_mode: str = "auto to 1:1 (keep width)"
+    par_mode: str = "keep input PAR"
     resize_enabled: bool = False
     resize_width: int = 720
     resize_height: int = 540
@@ -58,7 +58,7 @@ class Settings:
     mdegrain_blksize: int = 16
     dfttest_sigma: float = 2.0
     # --- Filtering : Vapoursynth > Color
-    color_matrix_to_709: bool = True
+    color_matrix_to_709: bool = False
     color_matrix_source: str = "auto"
     # --- Filtering : Vapoursynth > DeHalo > FineDehalo (havsfunc)
     finedehalo_enabled: bool = True

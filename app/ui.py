@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import engine, paths
 from . import settings as st
 
-VERSION = "1.3"
+VERSION = "1.4"
 VIDEO_FILTER = "Vidéos (*.dv *.DV *.avi *.mov *.mp4 *.mkv *.m2t *.mts *.mpg);;Tous les fichiers (*)"
 
 

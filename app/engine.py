@@ -341,7 +341,7 @@ def audio_args(s: Settings, info, input_index, log):
 def container_args(s: Settings):
     if s.container == "mp4":
         return ["-movflags", "+faststart+write_colr", "-write_tmcd", "0"]
-    return ["-movflags", "+write_colr"] if s.container == "mov" else []
+    return ["-movflags", "+write_colr", "-write_tmcd", "0"] if s.container == "mov" else []
 
 
 def _reader(stream, sink):
