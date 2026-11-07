@@ -94,6 +94,18 @@ jobs:
           sudo mv /opt/homebrew /opt/homebrew_hidden
           "dist/822 DV.app/Contents/MacOS/822 DV" --selftest "$RUNNER_TEMP/test.dv" "$RUNNER_TEMP/out_app"
 
+      - name: Test de l'interface (captures de chaque onglet)
+        id: uitest
+        run: |
+          QT_QPA_PLATFORM=offscreen "dist/822 DV.app/Contents/MacOS/822 DV" --uitest "$RUNNER_TEMP/captures"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captures-interface
+          path: ${{ runner.temp }}/captures
+          if-no-files-found: ignore
+
       - name: Remettre Homebrew
         if: always()
         run: if [ -d /opt/homebrew_hidden ]; then sudo mv /opt/homebrew_hidden /opt/homebrew; fi
@@ -111,7 +123,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Publier la version
-        if: steps.apptest.outcome == 'success'
+        if: steps.apptest.outcome == 'success' && steps.uitest.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
