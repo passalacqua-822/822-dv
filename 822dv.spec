@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Construction de « 822 DV.app » avec PyInstaller (lancé par .github/workflows/build.yml).
+# Construction de « 822.DV.app » avec PyInstaller (lancé par .github/workflows/build.yml).
 import glob
 import os
 
@@ -32,16 +32,16 @@ a = Analysis(
     excludes=["tkinter"],
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="822 DV", console=False,
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="822.DV", console=False,
           target_arch="arm64", codesign_identity=None)
-coll = COLLECT(exe, a.binaries, a.datas, name="822 DV")
+coll = COLLECT(exe, a.binaries, a.datas, name="822.DV")
 app = BUNDLE(
     coll,
-    name="822 DV.app",
+    name="822.DV.app",
     icon="build/822dv.icns",
     bundle_identifier="fr.passalacqua.822dv",
     info_plist={
-        "CFBundleShortVersionString": "1.0",
+        "CFBundleShortVersionString": "1.1", "CFBundleName": "822.DV", "CFBundleDisplayName": "822.DV",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "13.0",
     },

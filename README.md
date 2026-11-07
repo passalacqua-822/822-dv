@@ -1,4 +1,4 @@
-# 822 DV
+# 822.DV
 
 Interface Mac (Apple Silicon, sans Rosetta) pour déinterlacer et convertir des vidéos DV, organisée comme Hybrid :
 Base, Crop/Resize, Filtering (QTGMC, débruitage, couleur), ProRes, x264/x265, FFV1, Audio, Jobs, Config, Logs.

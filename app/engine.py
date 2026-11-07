@@ -177,7 +177,51 @@ def _mdegrain(core, clip, s):
     return fn(clip, sup, *vecs, thsad=s.mdegrain_thsad)
 
 
-def build_vs(s: Settings, src, scan, log):
+def crop_values(s: Settings):
+    """(gauche, droite, haut, bas), valeurs paires ; zéros si le recadrage est désactivé."""
+    if not s.crop_enabled:
+        return (0, 0, 0, 0)
+    return tuple(v - v % 2 for v in (s.crop_left, s.crop_right, s.crop_top, s.crop_bottom))
+
+
+def _par(info):
+    num, _, den = info["sar"].replace("/", ":").partition(":")
+    try:
+        return float(num) / float(den or 1)
+    except (ValueError, ZeroDivisionError):
+        return 1.0
+
+
+def target_size(s: Settings, info):
+    """Taille de sortie (largeur, hauteur) en pixels carrés, ou None pour garder la taille et le PAR d'origine.
+
+    Un redimensionnement manuel (Picture resize) est prioritaire sur la conversion automatique du PAR.
+    """
+    if s.resize_enabled:
+        return (s.resize_width, s.resize_height)
+    if s.par_mode.startswith("keep input"):
+        return None
+    l, r, t, b = crop_values(s)
+    w, h = info["width"] - l - r, info["height"] - t - b
+    par = _par(info)
+    if abs(par - 1.0) < 1e-3:
+        return None
+    if "keep height" in s.par_mode:
+        w = round(w * par / 2) * 2
+    else:
+        h = round(h / par / 2) * 2
+    return (w, h)
+
+
+def source_matrix(s: Settings, info):
+    if s.color_matrix_source != "auto":
+        return s.color_matrix_source.split()[0]
+    if info["height"] in (480, 486):
+        return "170m"
+    return "470bg" if info["height"] <= 576 else "709"
+
+
+def build_vs(s: Settings, src, scan, log, info):
     vs, core = vs_core(log)
     clip = _source(core, src)
 
@@ -206,27 +250,34 @@ def build_vs(s: Settings, src, scan, log):
         clip = _mdegrain(core, clip, s)
     elif s.denoiser == "DFTTest":
         if not hasattr(core, "dfttest"):
-            raise RuntimeError("DFTTest n'est pas disponible dans cette version de 822 DV.")
+            raise RuntimeError("DFTTest n'est pas disponible dans cette version de 822.DV.")
         clip = core.dfttest.DFTTest(clip, sigma=s.dfttest_sigma)
 
-    if s.crop_enabled:
-        c = [v - v % 2 for v in (s.crop_left, s.crop_right, s.crop_top, s.crop_bottom)]
-        if any(c):
-            clip = core.std.Crop(clip, left=c[0], right=c[1], top=c[2], bottom=c[3])
+    if s.finedehalo_enabled:
+        import havsfunc as haf
+        fkw = dict(rx=s.fdh_rx, ry=s.fdh_ry, thmi=s.fdh_thmi, thma=s.fdh_thma, thlimi=s.fdh_thlimi,
+                   thlima=s.fdh_thlima, darkstr=s.fdh_darkstr, brightstr=s.fdh_brightstr,
+                   showmask=int(s.fdh_showmask[0]) if s.fdh_showmask[0].isdigit() else 0,
+                   contra=s.fdh_contra, excl=s.fdh_excl, edgeproc=s.fdh_edgeproc)
+        log("FineDehalo(" + ", ".join(f"{k}={v!r}" for k, v in fkw.items()) + ")")
+        clip = haf.FineDehalo(clip, **fkw)
+
+    c = crop_values(s)
+    if any(c):
+        clip = core.std.Crop(clip, left=c[0], right=c[1], top=c[2], bottom=c[3])
 
     vs_fmt, _ = output_format(s)
     kw = {"format": getattr(vs, vs_fmt)}
-    if s.color_matrix_601_to_709:
-        kw.update(matrix_in_s="470bg", matrix_s="709")
-    if s.resize_enabled:
-        kw.update(width=s.resize_width, height=s.resize_height)
-        if s.resizer == "Bicubic":
-            kw.update(filter_param_a=s.bicubic_b, filter_param_b=s.bicubic_c)
-        elif s.resizer == "Lanczos":
-            kw.update(filter_param_a=3)
-        clip = getattr(core.resize, s.resizer)(clip, **kw)
-    else:
-        clip = core.resize.Spline36(clip, **kw)
+    if s.color_matrix_to_709:
+        kw.update(matrix_in_s=source_matrix(s, info), matrix_s="709")
+    dims = target_size(s, info)
+    if dims:
+        kw.update(width=dims[0], height=dims[1])
+    if s.resizer == "Bicubic":
+        kw.update(filter_param_a=s.bicubic_b, filter_param_b=s.bicubic_c)
+    elif s.resizer == "Lanczos":
+        kw.update(filter_param_a=3)
+    clip = getattr(core.resize, s.resizer)(clip, **kw)
 
     if s.vs_custom_code.strip():
         ns = {"vs": vs, "core": core, "clip": clip}
@@ -240,8 +291,14 @@ def build_vs(s: Settings, src, scan, log):
 def video_args(s: Settings, pass_no=None, passlog=None):
     _, pix = output_format(s)
     vh = s.video_handling
+    tags = (["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+            if s.color_matrix_to_709 else [])
     if vh == "ProRes":
-        return ["-c:v", "prores_ks", "-profile:v", str(PRORES[s.prores_profile]), "-vendor", "apl0", "-pix_fmt", pix]
+        if s.prores_encoder.startswith("VideoToolbox"):
+            vt = {"Proxy": "proxy", "LT": "lt", "Standard": "standard", "HQ": "hq", "4444": "4444", "4444 XQ": "xq"}
+            return ["-c:v", "prores_videotoolbox", "-profile:v", vt[s.prores_profile]] + tags
+        enc = "prores_aw" if s.prores_encoder.startswith("Anatoliy") else "prores_ks"
+        return ["-c:v", enc, "-profile:v", str(PRORES[s.prores_profile]), "-vendor", "apl0", "-pix_fmt", pix] + tags
     if vh in ("x264", "x265"):
         a = ["-c:v", "libx264" if vh == "x264" else "libx265", "-preset", s.x26x_preset, "-pix_fmt", pix]
         if s.x26x_tune != "none":
@@ -257,8 +314,8 @@ def video_args(s: Settings, pass_no=None, passlog=None):
             a += ["-tag:v", "hvc1"]
         if s.x26x_extra.strip():
             a += shlex.split(s.x26x_extra)
-        return a
-    return ["-c:v", "ffv1", "-level", str(s.ffv1_level), "-pix_fmt", pix]
+        return a + tags
+    return ["-c:v", "ffv1", "-level", str(s.ffv1_level), "-pix_fmt", pix] + tags
 
 
 def audio_args(s: Settings, info, input_index, log):
@@ -281,7 +338,9 @@ def audio_args(s: Settings, info, input_index, log):
 
 
 def container_args(s: Settings):
-    return ["-movflags", "+faststart", "-write_tmcd", "0"] if s.container == "mp4" else []
+    if s.container == "mp4":
+        return ["-movflags", "+faststart+write_colr", "-write_tmcd", "0"]
+    return ["-movflags", "+write_colr"] if s.container == "mov" else []
 
 
 def _reader(stream, sink):
@@ -346,7 +405,7 @@ def _run_ff(cmd, duration, on_progress, cancel, offset, span):
         raise RuntimeError("FFmpeg a échoué :\n" + "\n".join(err))
 
 
-def ffmpeg_filters(s: Settings, scan, log):
+def ffmpeg_filters(s: Settings, scan, log, info):
     f = []
     if scan != "progressive" and s.deinterlacer != "none":
         name = "bwdif" if s.deinterlacer.startswith("Bwdif") else "yadif"
@@ -355,13 +414,18 @@ def ffmpeg_filters(s: Settings, scan, log):
     if s.denoiser != "none":
         log("Avec Bwdif/Yadif, le débruitage utilise le filtre hqdn3d de FFmpeg.")
         f.append("hqdn3d")
-    if s.crop_enabled:
-        l, r, t, b = (v - v % 2 for v in (s.crop_left, s.crop_right, s.crop_top, s.crop_bottom))
-        if any((l, r, t, b)):
-            f.append(f"crop=iw-{l + r}:ih-{t + b}:{l}:{t}")
-    matrix = ":in_color_matrix=bt601:out_color_matrix=bt709" if s.color_matrix_601_to_709 else ""
-    if s.resize_enabled:
-        f.append(f"scale={s.resize_width}:{s.resize_height}:flags={FF_SCALE_FLAGS[s.resizer]}{matrix}")
+    if s.finedehalo_enabled:
+        log("FineDehalo n'existe qu'avec QTGMC (Vapoursynth) : ignoré avec Bwdif/Yadif.")
+    l, r, t, b = crop_values(s)
+    if any((l, r, t, b)):
+        f.append(f"crop=iw-{l + r}:ih-{t + b}:{l}:{t}")
+    matrix = ""
+    if s.color_matrix_to_709:
+        src_m = "bt709" if source_matrix(s, info) == "709" else "bt601"
+        matrix = f":in_color_matrix={src_m}:out_color_matrix=bt709"
+    dims = target_size(s, info)
+    if dims:
+        f.append(f"scale={dims[0]}:{dims[1]}:flags={FF_SCALE_FLAGS[s.resizer]}{matrix}")
     elif matrix:
         f.append("scale=iw:ih" + matrix)
     return f
@@ -384,12 +448,12 @@ def run_job(src, s: Settings, log=print, on_progress=lambda p: None, cancel=None
     log(f"Source : {describe(info)}")
     scan = s.scan_type if s.scan_type != "auto" else detect_scan(src, info, log)
     ff = paths.tool("ffmpeg")
-    sar = "1" if s.resize_enabled else info["sar"].replace(":", "/")
+    sar = "1" if target_size(s, info) else info["sar"].replace(":", "/")
     two_pass = s.video_handling in ("x264", "x265") and s.x26x_rate_control == "Bitrate (2-pass)"
     passlog = os.path.join(tempfile.gettempdir(), f"822dv_pass_{os.getpid()}")
 
     if s.deinterlacer.startswith(("Bwdif", "Yadif")):
-        filters = ffmpeg_filters(s, scan, log) + [f"setsar={sar}"]
+        filters = ffmpeg_filters(s, scan, log, info) + [f"setsar={sar}"]
         base = [ff, "-hide_banner", "-nostdin", "-y", "-nostats", "-progress", "pipe:1", "-i", src,
                 "-map", "0:v:0", "-vf", ",".join(filters)]
         log("Filtres FFmpeg : " + ",".join(filters))
@@ -400,7 +464,7 @@ def run_job(src, s: Settings, log=print, on_progress=lambda p: None, cancel=None
         else:
             _run_ff(base + video_args(s) + tail, info["duration"], on_progress, cancel, 0, 100)
     else:
-        clip = build_vs(s, src, scan, log)
+        clip = build_vs(s, src, scan, log, info)
         log(f"Sortie : {clip.width}x{clip.height}, {float(clip.fps):g} i/s, {clip.num_frames} images")
         tail = audio_args(s, info, 1, log) + container_args(s) + [out]
         base = [ff, "-hide_banner", "-nostdin", "-y", "-f", "yuv4mpegpipe", "-i", "pipe:0", "-i", src,

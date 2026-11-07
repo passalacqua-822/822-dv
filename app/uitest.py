@@ -26,6 +26,15 @@ def run(args):
         path = os.path.join(outdir, f"{i:02d}_{name}.png")
         w.grab().save(path)
         print("capture :", path)
+    # Sous-onglets Vapoursynth (Color, DeNoise, DeHalo…)
+    w.tabs.setCurrentIndex(next(i for i in range(w.tabs.count()) if w.tabs.tabText(i) == "Filtering"))
+    w.filter_tabs.setCurrentIndex(1)
+    for j in range(w.vs_tabs.count()):
+        w.vs_tabs.setCurrentIndex(j)
+        app.processEvents()
+        path = os.path.join(outdir, f"20_Vapoursynth_{w.vs_tabs.tabText(j)}.png")
+        w.grab().save(path)
+        print("capture :", path)
     w.close()
     print("UITEST OK")
     return 0

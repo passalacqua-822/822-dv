@@ -12,14 +12,18 @@ LAST_FILE = os.path.join(APP_DIR, "last.json")
 LOG_DIR = os.path.join(HOME, "Library", "Logs", "822 DV")
 
 
+SETTINGS_VERSION = 2  # version 2 : preset « 822 » (ProRes 422, PAR auto 1:1, Rec.709, FineDehalo)
+
+
 @dataclass
 class Settings:
+    settings_version: int = SETTINGS_VERSION
     # --- Base
     output_dir: str = os.path.join(HOME, "Movies", "822 DV")
     output_suffix: str = "_822dv"
     container: str = "mov"
     video_handling: str = "ProRes"
-    audio_handling: str = "passthrough (first track)"
+    audio_handling: str = "passthrough (all tracks)"
     overwrite: bool = True
     # --- Crop / Resize
     crop_enabled: bool = False
@@ -27,7 +31,8 @@ class Settings:
     crop_top: int = 0
     crop_right: int = 0
     crop_bottom: int = 0
-    resize_enabled: bool = True
+    par_mode: str = "auto to 1:1 (keep width)"
+    resize_enabled: bool = False
     resize_width: int = 720
     resize_height: int = 540
     resizer: str = "Spline36"
@@ -51,10 +56,26 @@ class Settings:
     mdegrain_thsad: int = 300
     mdegrain_blksize: int = 16
     dfttest_sigma: float = 2.0
-    # --- Filtering : Color
-    color_matrix_601_to_709: bool = False
+    # --- Filtering : Vapoursynth > Color
+    color_matrix_to_709: bool = True
+    color_matrix_source: str = "auto"
+    # --- Filtering : Vapoursynth > DeHalo > FineDehalo (havsfunc)
+    finedehalo_enabled: bool = True
+    fdh_rx: float = 2.0
+    fdh_ry: float = 2.0
+    fdh_thmi: int = 80
+    fdh_thma: int = 128
+    fdh_darkstr: float = 1.5
+    fdh_brightstr: float = 1.0
+    fdh_thlimi: int = 50
+    fdh_thlima: int = 100
+    fdh_showmask: str = "none"
+    fdh_contra: float = 0.0
+    fdh_edgeproc: float = 0.0
+    fdh_excl: bool = True
     # --- Encoders
-    prores_profile: str = "HQ"
+    prores_encoder: str = "Kostya (prores_ks)"
+    prores_profile: str = "Standard"
     x26x_rate_control: str = "CRF"
     x26x_crf: float = 18.0
     x26x_bitrate: int = 8000
@@ -75,6 +96,10 @@ CHOICES = {
     "audio_handling": ["passthrough (first track)", "passthrough (all tracks)",
                        "AAC", "PCM 16-bit", "none"],
     "resizer": ["Spline36", "Spline16", "Spline64", "Lanczos", "Bicubic", "Bilinear", "Point"],
+    "par_mode": ["auto to 1:1 (keep width)", "auto to 1:1 (keep height)", "keep input PAR"],
+    "color_matrix_source": ["auto", "470bg (Rec.601 PAL)", "170m (Rec.601 NTSC)", "709 (Rec.709)"],
+    "fdh_showmask": ["none", "1 - outside", "2 - shrink", "3 - edges", "4 - final"],
+    "prores_encoder": ["Kostya (prores_ks)", "Anatoliy (prores_aw)", "VideoToolbox (Apple)"],
     "deinterlacer": ["QTGMC (Vapoursynth)", "Bwdif (FFmpeg)", "Yadif (FFmpeg)", "none"],
     "scan_type": ["auto", "bff", "tff", "progressive"],
     "qtgmc_preset": ["Placebo", "Very Slow", "Slower", "Slow", "Medium", "Fast",
@@ -95,6 +120,8 @@ def load(path=LAST_FILE):
             data = json.load(f)
     except (OSError, ValueError):
         return Settings()
+    if path == LAST_FILE and data.get("settings_version", 1) < SETTINGS_VERSION:
+        return Settings()  # nouvelle version du preset de base : on repart dessus
     known = {f.name for f in fields(Settings)}
     s = Settings()
     for k, v in data.items():
@@ -117,6 +144,18 @@ def profiles():
 
 def profile_path(name):
     return os.path.join(PROFILE_DIR, f"{name}.json")
+
+
+def ensure_base_profile():
+    """Crée (ou met à jour) le preset de base « 822 » avec les réglages par défaut."""
+    p = profile_path("822")
+    try:
+        with open(p, encoding="utf-8") as f:
+            if json.load(f).get("settings_version", 1) >= SETTINGS_VERSION:
+                return
+    except (OSError, ValueError):
+        pass
+    save(Settings(), p)
 
 
 # ---------------------------------------------------------------- import Hybrid

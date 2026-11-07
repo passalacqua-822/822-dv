@@ -1,4 +1,4 @@
-"""822 DV - interface (organisation inspirée de Hybrid : Base, Crop/Resize, Filtering, encodeurs, Audio, Jobs, Config, Logs)."""
+"""822.DV - interface (organisation inspirée de Hybrid : Base, Crop/Resize, Filtering, encodeurs, Audio, Jobs, Config, Logs)."""
 import datetime
 import os
 import subprocess
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import engine, paths
 from . import settings as st
 
-VERSION = "1.0"
+VERSION = "1.1"
 VIDEO_FILTER = "Vidéos (*.dv *.DV *.avi *.mov *.mp4 *.mkv *.m2t *.mts *.mpg);;Tous les fichiers (*)"
 
 
@@ -144,7 +144,7 @@ class QueueWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("822 DV")
+        self.setWindowTitle("822.DV")
         self.resize(1100, 760)
         self.setAcceptDrops(True)
         self.b = Binder()
@@ -154,14 +154,14 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._tab_base(), "Base")
-        self.tabs.addTab(self._tab_crop_resize(), "Crop/Resize")
-        self.tabs.addTab(self._tab_filtering(), "Filtering")
         self.tabs.addTab(self._tab_prores(), "ProRes")
         self.tabs.addTab(self._tab_x26x(), "x264/x265")
         self.tabs.addTab(self._tab_ffv1(), "FFV1")
+        self.tabs.addTab(self._tab_crop_resize(), "Crop/Resize")
+        self.tabs.addTab(self._tab_filtering(), "Filtering")
         self.tabs.addTab(self._tab_audio(), "Audio")
-        self.tabs.addTab(self._tab_jobs(), "Jobs")
         self.tabs.addTab(self._tab_config(), "Config")
+        self.tabs.addTab(self._tab_jobs(), "Jobs")
         self.tabs.addTab(self._tab_logs(), "Logs")
 
         bottom = QHBoxLayout()
@@ -184,8 +184,10 @@ class MainWindow(QMainWindow):
         lay.addLayout(bottom)
         self.setCentralWidget(central)
         self._menus()
+        st.ensure_base_profile()
+        self._refresh_profiles()
         self.b.write(st.load())
-        self.log(f"822 DV {VERSION} prêt.")
+        self.log(f"822.DV {VERSION} prêt.")
 
     # ---------------------------------------------------------------- onglets
     def _tab_base(self):
@@ -247,7 +249,9 @@ class MainWindow(QMainWindow):
 
         res = QGroupBox("Resize")
         f = QFormLayout(res)
-        f.addRow(self.b.check("resize_enabled", "Picture resize (pixels carrés)"))
+        f.addRow("Pixel aspect ratio (PAR)", self.b.combo("par_mode"))
+        f.addRow(QLabel("« auto to 1:1 » convertit en pixels carrés (DV PAL 4:3 → 720x540 ou 768x576)."))
+        f.addRow(self.b.check("resize_enabled", "Picture resize manuel (prioritaire sur le PAR auto)"))
         f.addRow("Width", self.b.spin("resize_width", 16, 7680, 2))
         f.addRow("Height", self.b.spin("resize_height", 16, 4320, 2))
         f.addRow("Resizer", self.b.combo("resizer"))
@@ -266,6 +270,7 @@ class MainWindow(QMainWindow):
 
     def _tab_filtering(self):
         inner = QTabWidget()
+        self.filter_tabs = inner
 
         dei = QWidget()
         v = QVBoxLayout(dei)
@@ -289,9 +294,24 @@ class MainWindow(QMainWindow):
         v.addStretch(1)
         inner.addTab(dei, "(De-)Interlace/Telecine")
 
+        vsyn = QTabWidget()
+        self.vs_tabs = vsyn
+        inner.addTab(vsyn, "Vapoursynth")
+
+        col = QWidget()
+        v = QVBoxLayout(col)
+        box = QGroupBox("Color")
+        f = QFormLayout(box)
+        f.addRow(self.b.check("color_matrix_to_709", "Color matrix → Rec.709"))
+        f.addRow("Source matrix", self.b.combo("color_matrix_source"))
+        f.addRow(QLabel("auto : Rec.601 pour la SD (DV PAL/NTSC), Rec.709 pour la HD."))
+        v.addWidget(box)
+        v.addStretch(1)
+        vsyn.addTab(col, "Color")
+
         den = QWidget()
         v = QVBoxLayout(den)
-        box = QGroupBox("Denoise")
+        box = QGroupBox("DeNoise")
         f = QFormLayout(box)
         f.addRow("Denoiser", self.b.combo("denoiser"))
         f.addRow("MDegrain radius", self.b.spin("mdegrain_radius", 1, 3))
@@ -300,29 +320,52 @@ class MainWindow(QMainWindow):
         f.addRow("DFTTest sigma", self.b.dspin("dfttest_sigma", 0, 64, 0.5))
         v.addWidget(box)
         v.addStretch(1)
-        inner.addTab(den, "Denoise")
+        vsyn.addTab(den, "DeNoise")
 
-        col = QWidget()
-        v = QVBoxLayout(col)
-        box = QGroupBox("Color")
-        f = QFormLayout(box)
-        f.addRow(self.b.check("color_matrix_601_to_709", "Color matrix Rec.601 → Rec.709"))
+        deh = QWidget()
+        v = QVBoxLayout(deh)
+        box = QGroupBox()
+        g = QGridLayout(box)
+        g.addWidget(self.b.check("finedehalo_enabled", "FineDehalo"), 0, 0, 3, 1)
+
+        def pair(row, col, label, a, b):
+            h = QHBoxLayout()
+            h.addWidget(a)
+            h.addWidget(QLabel("/"))
+            h.addWidget(b)
+            g.addWidget(QLabel(label), row, col)
+            g.addLayout(h, row, col + 1)
+
+        pair(0, 1, "Radius (x/y):", self.b.dspin("fdh_rx", 0, 10, 0.1, 1), self.b.dspin("fdh_ry", 0, 10, 0.1, 1))
+        pair(1, 1, "Strength:", self.b.dspin("fdh_darkstr", 0, 10, 0.1, 2), self.b.dspin("fdh_brightstr", 0, 10, 0.1, 2))
+        g.addWidget(QLabel("Edge processing:"), 2, 1)
+        g.addWidget(self.b.dspin("fdh_edgeproc", 0, 100, 0.1, 2), 2, 2)
+        pair(0, 3, "Edge threshold (min/max):", self.b.spin("fdh_thmi", 0, 255), self.b.spin("fdh_thma", 0, 255))
+        pair(1, 3, "Limit threshold (min/max):", self.b.spin("fdh_thlimi", 0, 255), self.b.spin("fdh_thlima", 0, 255))
+        g.addWidget(self.b.check("fdh_excl", "Exclusion zone"), 2, 4)
+        g.addWidget(QLabel("Show mask:"), 0, 5)
+        g.addWidget(self.b.combo("fdh_showmask"), 0, 6)
+        g.addWidget(QLabel("Contrast sharpening:"), 1, 5)
+        g.addWidget(self.b.dspin("fdh_contra", 0, 10, 0.1, 2), 1, 6)
         v.addWidget(box)
+        v.addWidget(QLabel("Strength = force sur les halos sombres / clairs (darkstr / brightstr)."))
         v.addStretch(1)
-        inner.addTab(col, "Color")
+        vsyn.addTab(deh, "DeHalo")
 
         cus = QWidget()
         v = QVBoxLayout(cus)
         v.addWidget(QLabel("Code VapourSynth exécuté à la fin du filtrage (variables : vs, core, clip)."))
         v.addWidget(self.b.text("vs_custom_code", "clip = core.std.Levels(clip, ...)"))
-        inner.addTab(cus, "Custom")
+        vsyn.addTab(cus, "Custom")
         return inner
 
     def _tab_prores(self):
         page = QWidget()
         f = QFormLayout(page)
+        f.addRow("Encoder", self.b.combo("prores_encoder"))
         f.addRow("Profile", self.b.combo("prores_profile"))
-        f.addRow(QLabel("Proxy / LT / Standard / HQ : 4:2:2 10 bits.  4444 / 4444 XQ : 4:4:4 10 bits."))
+        f.addRow(QLabel("Standard = ProRes 422.  Proxy / LT / Standard / HQ : 4:2:2 10 bits.  4444 / 4444 XQ : 4:4:4 10 bits.\n"
+                        "VideoToolbox utilise l'encodeur matériel d'Apple (plus rapide)."))
         return page
 
     def _tab_x26x(self):
@@ -420,9 +463,9 @@ class MainWindow(QMainWindow):
             a.triggered.connect(slot)
             m.addAction(a)
         h = self.menuBar().addMenu("Help")
-        a = QAction("About 822 DV", self)
+        a = QAction("About 822.DV", self)
         a.triggered.connect(lambda: QMessageBox.about(
-            self, "822 DV", f"822 DV {VERSION}\nInterface pour VapourSynth / QTGMC et FFmpeg.\n"
+            self, "822.DV", f"822.DV {VERSION}\nInterface pour VapourSynth / QTGMC et FFmpeg.\n"
                             "Outils intégrés : VapourSynth, havsfunc, MVTools, BestSource, FFmpeg (logiciels libres)."))
         h.addAction(a)
 
@@ -493,7 +536,7 @@ class MainWindow(QMainWindow):
     def add_to_queue(self):
         files = [self.inputs.item(i).text() for i in range(self.inputs.count())]
         if not files:
-            QMessageBox.information(self, "822 DV", "Ajoute d'abord des fichiers dans l'onglet Base.")
+            QMessageBox.information(self, "822.DV", "Ajoute d'abord des fichiers dans l'onglet Base.")
             return
         s = self.b.read()
         st.save(s)
@@ -533,7 +576,7 @@ class MainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
         if not any(j["status"] == "waiting" for j in self.jobs):
-            QMessageBox.information(self, "822 DV", "Aucun job en attente. Clique d'abord sur « Add to queue ».")
+            QMessageBox.information(self, "822.DV", "Aucun job en attente. Clique d'abord sur « Add to queue ».")
             return
         self.worker = QueueWorker(self.jobs)
         self.worker.log.connect(self.log)
@@ -629,7 +672,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e):
         if self.worker and self.worker.isRunning():
-            if QMessageBox.question(self, "822 DV", "Un traitement est en cours. Quitter quand même ?") != QMessageBox.Yes:
+            if QMessageBox.question(self, "822.DV", "Un traitement est en cours. Quitter quand même ?") != QMessageBox.Yes:
                 e.ignore()
                 return
             self.worker.cancel.set()
@@ -643,7 +686,7 @@ class MainWindow(QMainWindow):
 
 def run_gui():
     app = QApplication(sys.argv)
-    app.setApplicationName("822 DV")
+    app.setApplicationName("822.DV")
     icon = paths.icon_path()
     if icon:
         app.setWindowIcon(QIcon(icon))
