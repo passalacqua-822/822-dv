@@ -14,6 +14,9 @@ datas = [(f"{ENGINE}/pyscripts", "engine/pyscripts"), ("assets/icon_1024.png", "
 datas += [(f, "engine/vs-plugins") for f in glob.glob(f"{ENGINE}/vs-plugins/*.bin")]  # poids NNEDI3
 
 vs_datas, vs_bins, vs_hidden = collect_all("vapoursynth")
+# libvapoursynth charge ses filtres de base (std, resize, text) depuis son propre dossier :
+# on place libvapoursynthfilters à côté d'elle (racine de Frameworks).
+binaries += [(f, ".") for f in glob.glob(os.path.join(VS_SITE, "vapoursynth", "libvapoursynthfilters*.dylib"))]
 
 a = Analysis(
     ["822dv.py"],

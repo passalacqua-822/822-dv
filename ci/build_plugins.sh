@@ -12,6 +12,11 @@ git clone -q --depth 1 https://github.com/vapoursynth/vs-removegrain rg
 (cd rg && meson setup build --buildtype=release >/dev/null && ninja -C build)
 cp rg/build/*.dylib "$OUT/"
 
+echo "== MiscFilters (misc : AverageFrames, SCDetect, Hysteresis)"
+git clone -q --depth 1 https://github.com/vapoursynth/vs-miscfilters-obsolete misc
+(cd misc && meson setup build --buildtype=release >/dev/null && ninja -C build)
+cp misc/build/*.dylib "$OUT/"
+
 echo "== znedi3"
 git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.com/sekrit-twc/znedi3 zn
 (cd zn && make -j"$(sysctl -n hw.ncpu)" vsznedi3.so)
