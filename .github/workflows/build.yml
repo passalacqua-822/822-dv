@@ -136,6 +136,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v1.5.${{ github.run_number }}" 822-DV-mac.zip \
-            --title "822.DV 1.5 (build ${{ github.run_number }})" \
+          gh release create "v1.6.${{ github.run_number }}" 822-DV-mac.zip \
+            --title "822.DV 1.6 (build ${{ github.run_number }})" \
             --notes-file docs/RELEASE_NOTES.md

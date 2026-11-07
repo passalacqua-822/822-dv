@@ -32,5 +32,6 @@ for pair in "HomeOfVapourSynthEvolution/havsfunc:$HAVSFUNC_REF:havsfunc.py" \
   cp "$dir/$file" "$ENGINE/pyscripts/"
   echo "$file <- $repo@$ref"
 done
+python3 "$(dirname "$0")/patch_havsfunc.py" "$ENGINE/pyscripts/havsfunc.py"
 
 

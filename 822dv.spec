@@ -41,7 +41,7 @@ app = BUNDLE(
     icon="build/822dv.icns",
     bundle_identifier="fr.passalacqua.822dv",
     info_plist={
-        "CFBundleShortVersionString": "1.5", "CFBundleName": "822.DV", "CFBundleDisplayName": "822.DV",
+        "CFBundleShortVersionString": "1.6", "CFBundleName": "822.DV", "CFBundleDisplayName": "822.DV",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "13.0",
     },
