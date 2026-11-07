@@ -31,9 +31,19 @@ jobs:
         run: |
           brew install ffmpeg vapoursynth vapoursynth-mvtools vapoursynth-bestsource
           brew list --versions | grep -Ei 'vapoursynth|ffmpeg' || true
-          VS_SITE=$(ls -d "$(brew --prefix vapoursynth)"/libexec/lib/python3*/site-packages | head -1)
+          BREW_SITE=$(ls -d "$(brew --prefix vapoursynth)"/libexec/lib/python3*/site-packages | head -1)
+          # Le module de Homebrew est nommé pour Python 3.15 (*.abi3-darwin.so) ; on en fait une copie
+          # au nom reconnu par ce Python (*.abi3.so). Le module utilise l'ABI stable, compatible.
+          VS_SITE="$RUNNER_TEMP/vsmod"
+          rm -rf "$VS_SITE" && mkdir -p "$VS_SITE"
+          cp -R "$BREW_SITE/vapoursynth" "$VS_SITE/"
+          for f in "$VS_SITE"/vapoursynth/*.so; do
+            case "$f" in *.abi3-darwin.so) mv "$f" "${f%.abi3-darwin.so}.abi3.so";; esac
+          done
+          ls -la "$VS_SITE/vapoursynth"
+          python -c "import importlib.machinery as m; print('Suffixes :', m.EXTENSION_SUFFIXES)"
+          PYTHONPATH="$VS_SITE" python -c "import vapoursynth as vs; print(vs.core.version())"
           echo "VS_SITE=$VS_SITE" >> "$GITHUB_ENV"
-          echo "VS_SITE=$VS_SITE"
 
       - name: Dépendances Python
         run: python -m pip install --upgrade pip && python -m pip install PySide6 pyinstaller
