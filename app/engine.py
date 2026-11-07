@@ -246,9 +246,10 @@ def build_vs(s: Settings, src, scan, log, info):
             log("QTGMC(" + ", ".join(f"{k}={v!r}" for k, v in kw.items()) + ")")
             clip = haf.QTGMC(clip, **kw)
 
-    if s.denoiser.startswith("MDegrain"):
+    if s.denoise_enabled and s.denoiser.startswith("MDegrain"):
+        log(f"Débruitage MDegrain (radius {s.mdegrain_radius}, thSAD {s.mdegrain_thsad})")
         clip = _mdegrain(core, clip, s)
-    elif s.denoiser == "DFTTest":
+    elif s.denoise_enabled and s.denoiser == "DFTTest":
         if not hasattr(core, "dfttest"):
             raise RuntimeError("DFTTest n'est pas disponible dans cette version de 822.DV.")
         clip = core.dfttest.DFTTest(clip, sigma=s.dfttest_sigma)
@@ -411,7 +412,7 @@ def ffmpeg_filters(s: Settings, scan, log, info):
         name = "bwdif" if s.deinterlacer.startswith("Bwdif") else "yadif"
         mode = "send_field" if s.qtgmc_bob else "send_frame"
         f.append(f"{name}=mode={mode}:parity={scan}:deint=all")
-    if s.denoiser != "none":
+    if s.denoise_enabled:
         log("Avec Bwdif/Yadif, le débruitage utilise le filtre hqdn3d de FFmpeg.")
         f.append("hqdn3d")
     if s.finedehalo_enabled:

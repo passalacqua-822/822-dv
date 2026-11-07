@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from . import engine, paths
 from . import settings as st
 
-VERSION = "1.2"
+VERSION = "1.3"
 VIDEO_FILTER = "Vidéos (*.dv *.DV *.avi *.mov *.mp4 *.mkv *.m2t *.mts *.mpg);;Tous les fichiers (*)"
 
 
@@ -313,6 +313,7 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(den)
         box = QGroupBox("DeNoise")
         f = QFormLayout(box)
+        f.addRow(self.b.check("denoise_enabled", "Activer le débruitage"))
         f.addRow("Denoiser", self.b.combo("denoiser"))
         f.addRow("MDegrain radius", self.b.spin("mdegrain_radius", 1, 3))
         f.addRow("MDegrain thSAD", self.b.spin("mdegrain_thsad", 50, 2000, 25))

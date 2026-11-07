@@ -12,15 +12,15 @@ LAST_FILE = os.path.join(APP_DIR, "last.json")
 LOG_DIR = os.path.join(HOME, "Library", "Logs", "822 DV")
 
 
-SETTINGS_VERSION = 2  # version 2 : preset « 822 » (ProRes 422, PAR auto 1:1, Rec.709, FineDehalo)
+SETTINGS_VERSION = 3  # v2 : preset « 822 » ; v3 : sortie sur le Bureau, suffixe _cleanDV, débruitage désactivable
 
 
 @dataclass
 class Settings:
     settings_version: int = SETTINGS_VERSION
     # --- Base
-    output_dir: str = os.path.join(HOME, "Movies", "822 DV")
-    output_suffix: str = "_822dv"
+    output_dir: str = os.path.join(HOME, "Desktop")
+    output_suffix: str = "_cleanDV"
     container: str = "mov"
     video_handling: str = "ProRes"
     audio_handling: str = "passthrough (all tracks)"
@@ -51,7 +51,8 @@ class Settings:
     qtgmc_lossless: int = 0
     qtgmc_extra: str = ""
     # --- Filtering : Denoise
-    denoiser: str = "none"
+    denoise_enabled: bool = False
+    denoiser: str = "MDegrain (MVTools)"
     mdegrain_radius: int = 2
     mdegrain_thsad: int = 300
     mdegrain_blksize: int = 16
@@ -104,7 +105,7 @@ CHOICES = {
     "scan_type": ["auto", "bff", "tff", "progressive"],
     "qtgmc_preset": ["Placebo", "Very Slow", "Slower", "Slow", "Medium", "Fast",
                      "Faster", "Very Fast", "Super Fast", "Ultra Fast", "Draft"],
-    "denoiser": ["none", "MDegrain (MVTools)", "DFTTest"],
+    "denoiser": ["MDegrain (MVTools)", "DFTTest"],
     "prores_profile": ["Proxy", "LT", "Standard", "HQ", "4444", "4444 XQ"],
     "x26x_rate_control": ["CRF", "Bitrate (1-pass)", "Bitrate (2-pass)"],
     "x26x_preset": ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium",
