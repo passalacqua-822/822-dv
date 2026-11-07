@@ -9,7 +9,7 @@ ffmpeg -hide_banner -loglevel error -y \
   -f lavfi -i "sine=frequency=440:sample_rate=48000" \
   -t "$SECONDS_LEN" \
   -vf "interlace=scan=bff:lowpass=0" \
-  -c:v dvvideo -flags +ilme+ildct -top 0 -aspect 4:3 \
+  -c:v dvvideo -flags +ilme+ildct -aspect 4:3 \
   -ac 2 -ar 48000 -c:a pcm_s16le \
   -f dv "$OUT"
 ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate,field_order -of default=nw=1 "$OUT"
